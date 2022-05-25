@@ -49,7 +49,7 @@ def main():
     results.show()
 
     # Save results
-    results.save(save_dir='results/')
+    # results.save(save_dir='results/')
 
 
 if __name__ == '__main__':
