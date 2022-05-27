@@ -71,7 +71,4 @@ zipp==3.8.0
 timm==0.5.4
 pretrainedmodels==0.7.4
 efficientnet_pytorch==0.7.1
-<<<<<<< HEAD
 scikit-image==0.19.2
-=======
->>>>>>> c08202addbaa3dcdbdf99410b0ed2a6c4f2453af
