@@ -1,36 +1,51 @@
 import numpy as np
-import argparse
-import pygame
-# import shutil
+import skimage.exposure as exposure
 import cv2
 import torch
 
-'''
-usage: detect_trafficLights.py -i <path_to_img> (needed) -v True (optional, show inbetween steps)
-'''
-
-def detectDominantLight(image, radius, print_verbose):
-    # open image, make a copy and grayscale
-    #image = cv2.imread("path-to-image")
+def detectDominantLight(image):
     original = image.copy()
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # get brightest area in image with a given radious
-    gray = cv2.GaussianBlur(gray, (radius, radius), 0)
-    (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(gray)
-    image = original.copy()
-    detectedColor = image[maxLoc[1], maxLoc[0]] # center of detected peak brightness
-    if print_verbose == "True":
-        print(f"detected(BGR): {detectedColor}")
-        cv2.circle(image, maxLoc, radius, (255, 0, 0), 2)
-        cv2.imshow("Robust", image)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-    if detectedColor[1] == max(detectedColor) and detectedColor[2] == min(detectedColor):
-        return "GREEN"
-    elif detectedColor[2] == max(detectedColor) or detectedColor[2] > detectedColor[1]/1.15 and detectedColor[0] == min(detectedColor):
-        return "RED"
+
+    # calculate 2D histograms for pairs of channels: GR
+    histGR = cv2.calcHist([original], [1, 2], None, [256, 256], [0, 256, 0, 256])
+    
+    # histogram is float and counts need to be scale to range 0 to 255
+    histScaled = exposure.rescale_intensity(histGR, in_range=(0,1), out_range=(0,255)).clip(0,255).astype(np.uint8)
+    
+    # make masks
+    ww = 256
+    hh = 256
+    ww13 = ww // 3
+    ww23 = 2 * ww13
+    hh13 = hh // 3
+    hh23 = 2 * hh13
+    black = np.zeros_like(histScaled, dtype=np.uint8)
+
+    # specify points in OpenCV x,y format
+    ptsUR = np.array( [[[ww13,0],[ww-1,hh23],[ww-1,0]]], dtype=np.int32 )
+    redMask = black.copy()
+    cv2.fillPoly(redMask, ptsUR, (255,255,255))
+    ptsBL = np.array( [[[0,hh13],[ww23,hh-1],[0,hh-1]]], dtype=np.int32 )
+    greenMask = black.copy()
+    cv2.fillPoly(greenMask, ptsBL, (255,255,255))
+
+    #Test histogram against masks
+    region = cv2.bitwise_and(histScaled,histScaled,mask=redMask)
+    redCount = np.count_nonzero(region)
+    region = cv2.bitwise_and(histScaled,histScaled,mask=greenMask)
+    greenCount = np.count_nonzero(region)
+
+    # Find color
+    threshCount = 100
+    if redCount > greenCount and redCount > threshCount:
+        color = "RED"
+    elif greenCount > redCount and greenCount > threshCount:
+        color = "GREEN"
+    elif redCount < threshCount and greenCount < threshCount:
+        color = "YELLOW"
     else:
-        return "UNKNOWN"
+        color = "UNKNOWN"
+    return color
 
 def extractTrafficLights(results):
     coords = list()
@@ -45,84 +60,31 @@ def extractTrafficLights(results):
             coords.append((xmin, xmax, ymin, ymax, confidence))
     return coords
 
-def getTrafficLightStates(trafficLights, image, print_verbose):
-    fullImage = cv2.imread(image)
+def getTrafficLightStates(trafficLights, image):
+    fullImage = np.copy(image)
     trafficLightStates = list()
     for light in trafficLights:
-        width = int(light[1] - light[0])
-        height = int(light[3] - light[2])
-        if fullImage.shape[1] > fullImage.shape[0]: # vertically orented
-            croppedImage = fullImage[int(light[2])+int(height/8):int(light[3])-int(height/8), int(light[0])+int(width/3):int(light[1])-int(width/3)]
-        else: # horizontally oriented
-            croppedImage = fullImage[int(light[2]):int(light[3]), int(light[0]):int(light[1])]
-        if print_verbose == "True":
-            cv2.imshow('cropped', croppedImage)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
-        shorter = min(width, height)
-        radius = int(shorter/7) if int(shorter/7) % 2 != 0 else int(shorter/7) + 1
-        trafficLightStates.append((light[0], light[1], light[2], light[3], light[4], detectDominantLight(croppedImage, radius, print_verbose)))
+        croppedImage = fullImage[int(light[2]):int(light[3]), int(light[0]):int(light[1])]
+        trafficLightStates.append((light[0], light[1], light[2], light[3], light[4], detectDominantLight(croppedImage)))
     return trafficLightStates
 
-def drawFoundLightsAndStates(trafficLights, image):
-    pygame.init()
-    pyImage = pygame.image.load(image)
-    screen = pygame.display.set_mode(pyImage.get_rect().size)
-    font = pygame.font.Font('freesansbold.ttf', 16)
-    screen.blit(pyImage, (0,0))
-
+def drawFoundLightsAndStates(trafficLights, img):
+    drawnShapes = np.copy(img)
+    cv2.putText(drawnShapes, str(len(trafficLights)), (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
     for light in trafficLights:
-        height = light[1]-light[0]
-        width = light[3]-light[2]
         if light[5] == "RED":
-            borderColor = (255, 0, 0)
+            borderColor = (204, 0, 0)
         elif light[5] == "GREEN":
             borderColor = (0, 255, 0)
+        elif light[5] == "YELLOW":
+            borderColor = (255, 255, 102)
         else:
-            borderColor = (0, 0, 255)
-        pygame.draw.rect(screen, borderColor, pygame.Rect(light[0], light[2], height, width), 3)
-        pygame.draw.rect(screen, borderColor, pygame.Rect(light[0], light[2]-16, 16*2, 16))
-        text = font.render(str(round(100*light[4])) +"%" , True , (255,255,255))
-        screen.blit(text , (light[0],light[2]-16))
+            borderColor = (0, 0, 204)
+        cv2.rectangle(drawnShapes, (int(light[0]), int(light[2])), (int(light[1]), int(light[3])), borderColor, 3)
+    return drawnShapes
 
-    pygame.display.update()
-
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == 27):
-                #shutil.rmtree("temporary/", ignore_errors=False, onerror=None)
-                quit()
-
-def main():
-    # read given arguments
-    ap = argparse.ArgumentParser()
-    ap.add_argument("-i", "--image", help = "path to the image file")
-    ap.add_argument("-v", "--verbose", help = "show images as they are being processed")
-    args = vars(ap.parse_args())
-
-    # check if image is provided
-    if args["image"] is None:
-        print("No image provided")
-        quit()
-
-    # load model
-    model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # yolov5n, yolov5x6, custom
-    torch.save(model, 'model.pth')
-
-    # recognize all traffic lights in image
-    results = model(args["image"])
-
-    #save cropped image of every detected traffic light
-    #results.crop(True, "temporary/")
-
-    # extract only traffic lights from the result
-    trafficLights = extractTrafficLights(results)
-
-    # check for state of every detected traffic light
-    trafficLightStates = getTrafficLightStates(trafficLights, args["image"], args["verbose"])
-
-    # draw results
-    drawFoundLightsAndStates(trafficLightStates, args["image"])
-
-if __name__ == '__main__':
-    main()
+def get_trafficlights_drawn(rgb, bgr, recognized):
+    extracted_trafficlights = extractTrafficLights(recognized)
+    trafficlight_states = getTrafficLightStates(extracted_trafficlights, bgr)
+    drawn_trafficlights = drawFoundLightsAndStates(trafficlight_states, rgb)
+    return drawn_trafficlights
