@@ -1,3 +1,16 @@
+import os
+import glob
+import sys
+
+try:
+    sys.path.append(glob.glob('../PythonAPI/carla/dist/carla-*%d.%d-%s.egg' % (
+        sys.version_info.major,
+        sys.version_info.minor,
+        'win-amd64' if os.name == 'nt' else 'linux-x86_64'))[0])
+except IndexError:
+    pass
+
+
 import carla
 import random
 import queue
@@ -6,6 +19,7 @@ import cv2
 import time
 #import torch
 import matplotlib.pyplot as plt
+import object_detection
 
 import lane_detection
 
@@ -61,14 +75,17 @@ if __name__ == "__main__":
     # Init YOLOP
     #model = torch.hub.load('hustvl/yolop', 'yolop', trust_repo=True, pretrained=True)
 
+    model = object_detection.load_model()
+
     while True:
         image = image_queue.get()
         #image.save_to_disk("test-%06d.png" % (image.frame))
         data = to_bgra_array(image)
         #det_out, da_seg_out, ll_seg_out = model(data)
         try:
-            data_lane = lane_detection.draw_lane(data)
-            cv2.imshow("frame", data_lane)
+            # data_lane = lane_detection.draw_lane(data)
+            objects = object_detection.get_object(model, data)
+            cv2.imshow("frame", data)
         except Exception:
             pass
         #time.sleep(1)
