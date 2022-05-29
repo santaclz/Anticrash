@@ -86,7 +86,7 @@ if __name__ == "__main__":
     camera.listen(image_queue.put)
     actor_list.append(camera)
 
-    model = object_detection.load_model()
+    od_model = object_detection.load_model()
 
     # Main loop
     while True:
@@ -106,15 +106,15 @@ if __name__ == "__main__":
         data_drivable[:,:,2] = 0
         tmp_data = convert_rgb_bgr(tmp_data)
         #data_together = cv2.bitwise_or(data_drivable, tmp_data)
+        objects = object_detection.get_object(od_model, data)
         try:
             # data_lane = lane_detection.draw_lane(data)
-            objects = object_detection.get_object(model, data)
             #cv2.imshow("frame", data_together)
             #data_lane = lane_detection.draw_lane(data)
             #cv2.imshow("frame", data_lane)
 
-            # drawn_trafficlights = detect_trafficLights.get_trafficlights_drawn(rgb_img, bgr_img, recognized_objects)
-            # data_together = cv2.bitwise_or(drawn_trafficlights, data_drivable)
+            drawn_trafficlights = detect_trafficLights.get_trafficlights_drawn(rgb_img, bgr_img, recognized_objects)
+            data_together = cv2.bitwise_or(drawn_trafficlights, data_drivable)
             #cv2.imshow("frame", drawn_trafficlights)
 
         except Exception:
@@ -123,7 +123,6 @@ if __name__ == "__main__":
 
             print("exception caught!")
 
-        # cv2.imshow('frame', objects)
         cv2.imshow("frame", data_together)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
