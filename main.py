@@ -86,16 +86,18 @@ if __name__ == "__main__":
     camera.listen(image_queue.put)
     actor_list.append(camera)
 
-    od_model = object_detection.load_model()
-
     # Main loop
     while True:
+        vehicles = []
+
         image = image_queue.get()
         data = to_rgb_array(image)
 
         bgr_img = to_rgb_array(image)
         rgb_img = convert_rgb_bgr(bgr_img)
         recognized_objects = recognizeFromImage(rgb_img)
+
+        object_detection.find_items(recognized_objects.pred[0], object_detection.VEHICLES, vehicles)
         
         ### TODO run in another thread?
         data_drivable = drivable_detect.detect_drivable_area(data)
@@ -106,7 +108,7 @@ if __name__ == "__main__":
         data_drivable[:,:,2] = 0
         tmp_data = convert_rgb_bgr(tmp_data)
         #data_together = cv2.bitwise_or(data_drivable, tmp_data)
-        objects = object_detection.get_object(od_model, data)
+        objects = object_detection.get_object(model, data)
         try:
             # data_lane = lane_detection.draw_lane(data)
             #cv2.imshow("frame", data_together)
