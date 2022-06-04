@@ -20,6 +20,7 @@ import torch
 import time
 from threading import Thread
 from queue import Queue
+from torchvision import transforms
 
 from pygame.locals import K_ESCAPE
 from pygame.locals import K_SPACE
