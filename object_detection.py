@@ -19,17 +19,13 @@ def find_items(predictions, class_list, data):
     for elt in predictions:
         category = elt[5]
         if category in class_list:
-            print('found car')
+            print(f'found car: {elt[1:5]}')
             data.append(elt.tolist())
 
 
 
 def get_object(model, img):
     data = []
-
-    # Check if img path was given
-    # model = load_model()
-    # img = 'https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fstatic3.bigstockphoto.com%2F0%2F9%2F3%2Flarge1500%2F390205342.jpg&f=1&nofb=1' # example
 
     # Inference
     results = model(img)
