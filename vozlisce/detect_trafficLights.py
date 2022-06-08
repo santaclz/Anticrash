@@ -71,9 +71,44 @@ def getTrafficLightStates(trafficLights, image):
         trafficLightStates.append((light[0], light[1], light[2], light[3], light[4], detectDominantLight(croppedImage), "trafficlight"))
     return trafficLightStates
 
+def get_focus_light(img_x, lights):
+    if len(lights) > 0:
+        size_max = 0
+        size_index = 0
+        center = img_x / 2
+        center_index = 0
+        min_center_diff = center
+        for i, light in enumerate(lights):
+            if light[0] < img_x / 3:
+                continue
+            
+            size_current = (light[1]-light[0])*(light[3]-light[2])
+            if size_current > size_max:
+                size_max = size_current
+                size_index = i
+            
+            diff_current = abs((light[0]+(light[1]-light[0])/2) - center)
+            if diff_current < min_center_diff:
+                center_index = i
+                min_center_diff = diff_current
+        
+        #print(f"min diff: {min_center_diff}     threshold: {(center*2)/3}")
+        if min_center_diff < (center)/3:
+            focusLight = lights[center_index]
+        else:
+            focusLight = lights[size_index]
+
+        lights.remove(focusLight)
+        lights.append((focusLight[0], focusLight[1], focusLight[2], focusLight[3], focusLight[4], focusLight[5], focusLight[6], (0,255,255)))
+        return lights
+    return []
+
 def get_trafficlights(img, recognized, out_queue):
     extracted_trafficlights = extractTrafficLights(recognized)
     if len(extracted_trafficlights) == 0:
         return []
-    #return getTrafficLightStates(extracted_trafficlights, img[:, :, ::-1])
-    out_queue.put(getTrafficLightStates(extracted_trafficlights, img[:, :, ::-1]))
+    if len(extracted_trafficlights) > 1:
+        highlighted_focusLight = get_focus_light(img.shape[1], getTrafficLightStates(extracted_trafficlights, img[:, :, ::-1]))
+        out_queue.put(highlighted_focusLight)
+    else:
+        out_queue.put(getTrafficLightStates(extracted_trafficlights, img[:, :, ::-1]))
