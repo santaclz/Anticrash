@@ -110,18 +110,21 @@ if __name__ == "__main__":
         for location in lidar_measurement:
             print(location)
 
-        lidar_range = 50
-        points = np.frombuffer(lidar_measurement.raw_data, dtype=np.dtype('f4'))
+        lidar_range = 20 
+        points = np.frombuffer(lidar_measurement.raw_data, dtype=np.dtype('float32'))
         points = np.reshape(points, (int(points.shape[0] / 4), 4))
         lidar_data = np.array(points[:, :2])
         lidar_data *= min(WIDTH, HEIGHT) / (2.0 * lidar_range)
-        lidar_data += (0.5 * WIDTH, 0.5 * HEIGHT)
+        lidar_data += (0.5 * HEIGHT, 0.5 * WIDTH)
         lidar_data = np.fabs(lidar_data)  # pylint: disable=E1111
         lidar_data = lidar_data.astype(np.int32)
         lidar_data = np.reshape(lidar_data, (-1, 2))
-        lidar_img_size = (WIDTH, HEIGHT, 3)
+        lidar_img_size = (HEIGHT, WIDTH, 3)
         lidar_img = np.zeros((lidar_img_size), dtype=np.uint8)
         lidar_img[tuple(lidar_data.T)] = (255, 255, 255)
+        
+        lidar_img = np.flip(lidar_img, axis=0)
+
         cv2.imshow("lidar_frame", lidar_img)
 
         ### IMG logic
