@@ -1,6 +1,8 @@
+from sys import maxsize
 import numpy as np
 import skimage.exposure as exposure
 import cv2
+import copy
 
 def detectDominantLight(image):
     original = image.copy()
@@ -72,14 +74,17 @@ def getTrafficLightStates(trafficLights, image):
     return trafficLightStates
 
 def get_focus_light(img_x, lights):
-    if len(lights) > 0:
+    focusLights = copy.deepcopy(lights)
+    if len(focusLights) > 0:
         size_max = 0
         size_index = 0
         center = img_x / 2
         center_index = 0
         min_center_diff = center
-        for i, light in enumerate(lights):
-            if light[0] < img_x / 3:
+
+        for i, light in enumerate(focusLights):
+            if light[0] < center or light[4] < 0.45:
+                #print(f"skipping {light[5]} light:  confidence={light[4]}   {light[0]}<{(img_x/100)*40}")
                 continue
             
             size_current = (light[1]-light[0])*(light[3]-light[2])
@@ -91,16 +96,19 @@ def get_focus_light(img_x, lights):
             if diff_current < min_center_diff:
                 center_index = i
                 min_center_diff = diff_current
-        
-        #print(f"min diff: {min_center_diff}     threshold: {(center*2)/3}")
-        if min_center_diff < (center)/3:
-            focusLight = lights[center_index]
-        else:
-            focusLight = lights[size_index]
 
-        lights.remove(focusLight)
-        lights.append((focusLight[0], focusLight[1], focusLight[2], focusLight[3], focusLight[4], focusLight[5], focusLight[6], (0,255,255)))
-        return lights
+        maxSizeLight = focusLights[size_index]
+        if min_center_diff < (center)/3 and abs((maxSizeLight[0]+(maxSizeLight[1]-maxSizeLight[0])/2) - center) > (center)/3:
+            focusLight = focusLights[center_index]
+        else:
+            focusLight = focusLights[size_index]
+        if focusLight[0] < center:
+            return []
+        focusLights.remove(focusLight)
+        focusLights.append((focusLight[0], focusLight[1], focusLight[2], focusLight[3], focusLight[4], focusLight[5], focusLight[6], (0,255,255)))
+        #lights.remove(focusLight)
+        #lights.append((focusLight[0], focusLight[1], focusLight[2], focusLight[3], focusLight[4], focusLight[5], focusLight[6], (0,255,255)))
+        return focusLights
     return []
 
 def get_trafficlights(img, recognized, out_queue):
