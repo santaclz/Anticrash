@@ -83,8 +83,7 @@ def get_focus_light(img_x, lights):
         min_center_diff = center
 
         for i, light in enumerate(focusLights):
-            if light[0] < center or light[4] < 0.45:
-                #print(f"skipping {light[5]} light:  confidence={light[4]}   {light[0]}<{(img_x/100)*40}")
+            if light[0] < (center*2) / 3: # or light[4] < 0.45:
                 continue
             
             size_current = (light[1]-light[0])*(light[3]-light[2])
@@ -98,16 +97,13 @@ def get_focus_light(img_x, lights):
                 min_center_diff = diff_current
 
         maxSizeLight = focusLights[size_index]
-        if min_center_diff < (center)/3 and abs((maxSizeLight[0]+(maxSizeLight[1]-maxSizeLight[0])/2) - center) > (center)/3:
+        if min_center_diff < (center*2)/3: #and abs((maxSizeLight[0]+(maxSizeLight[1]-maxSizeLight[0])/2) - center) > (center)/3:
             focusLight = focusLights[center_index]
         else:
             focusLight = focusLights[size_index]
-        if focusLight[0] < center:
-            return []
+        
         focusLights.remove(focusLight)
         focusLights.append((focusLight[0], focusLight[1], focusLight[2], focusLight[3], focusLight[4], focusLight[5], focusLight[6], (0,255,255)))
-        #lights.remove(focusLight)
-        #lights.append((focusLight[0], focusLight[1], focusLight[2], focusLight[3], focusLight[4], focusLight[5], focusLight[6], (0,255,255)))
         return focusLights
     return []
 
