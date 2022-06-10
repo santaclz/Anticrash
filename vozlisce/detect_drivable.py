@@ -13,8 +13,7 @@ def init_model():
 
     return model
 
-def detect_drivable_area(input_img):
-    model = init_model()
+def detect_drivable_area(input_img, model):
     img = np.copy(input_img)
     img = np.float32(img) / 255.
     img = torch.tensor(img).permute((2,0,1)).unsqueeze(0) # tensor shape (1,3,640,384)

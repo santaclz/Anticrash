@@ -52,6 +52,9 @@ BB_COLOR = (248, 64, 24)
 model = torch.hub.load('ultralytics/yolov5', 'yolov5s')
 torch.save(model, 'model.pth')
 
+model2 = torch.hub.load('datvuthanh/hybridnets', 'hybridnets', pretrained=True)
+torch.save(model2, 'hybridnets.pth')
+
 ### client class
 class BasicSynchronousClient(object):
     def __init__(self):
@@ -276,7 +279,7 @@ class BasicSynchronousClient(object):
             if self.drivableArea:
                 start_time = time()
 
-                data_drivable = np.array(detect_drivable_area(array), dtype=np.uint8)
+                data_drivable = np.array(detect_drivable_area(array, model2), dtype=np.uint8)
                 data_drivable[:,:,0] = 0
                 data_drivable_draw = np.copy(data_drivable)
                 data_drivable[:,:,1] = 0
