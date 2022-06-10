@@ -170,21 +170,23 @@ class BasicSynchronousClient(object):
             main_light = [item for item in self.trafficLights if len(item) == 8]
             if len(main_light) != 0:
                 main_light = main_light[0]
-                #print(f"main light confidence: {main_light[4]}      x: {main_light[0]}")
                 if main_light[5] == (204, 0, 0):
-                    if speed > 3:
+                    if speed > 10:
                         control.throttle = 1
                         control.reverse = True
-                    else:
-                        control.throttle = 0
-                elif main_light[5] == (0, 255, 0):
-                    pass
-                else:
-                    if speed > 3:
+                    elif speed > 6:
+                        control.throttle = 0.5
+                        control.reverse = True
+                    elif speed > 2:
                         control.throttle = 0.1
                         control.reverse = True
                     else:
                         control.throttle = 0
+                elif main_light[5] == (0, 255, 0):
+                    control.throttle = 1
+                    control.reverse = False
+                else:
+                    control.throttle = 0
 
             # Control for staying in the lane
             if self.goFwd:
@@ -232,7 +234,7 @@ class BasicSynchronousClient(object):
 
     def render_detected(self, display, boxes):
         for box in boxes:
-            if box[4] < 0.45:
+            if box[4] < 0.5:
                 continue
             if box[-1] == "trafficlight":
                 pygame.draw.rect(display, box[5], (box[0],box[2],box[1]-box[0],box[3]-box[2]), 2)
@@ -344,6 +346,7 @@ class BasicSynchronousClient(object):
 
             self.render_gui(display)
             self.trafficLights = []
+
             if self.boundingBoxes:
                 lights_queue = Queue()
                 car_queue = Queue()
