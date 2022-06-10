@@ -18,7 +18,10 @@ import pygame
 import numpy as np
 import torch
 from threading import Thread
-from queue import Queue
+from queue import LifoQueue as Queue
+import cv2
+from time import time
+from time import sleep
 
 from pygame.locals import K_ESCAPE
 from pygame.locals import K_SPACE
@@ -29,14 +32,17 @@ from pygame.locals import K_w
 from pygame.locals import K_t
 from pygame.locals import K_f
 from pygame.locals import K_p
+from pygame.locals import K_g
+from pygame.locals import K_h
 
 import detect_trafficLights
 import detect_vehicles
-import detect_drivable
+from detect_drivable import detect_drivable_area
+#from detect_lanes import draw_lane, draw_lane_normal
 
 ### globals
-VIEW_WIDTH = 1920
-VIEW_HEIGHT = 1080
+VIEW_WIDTH = 1280
+VIEW_HEIGHT = 720
 VIEW_FOV = 90
 
 BB_COLOR = (248, 64, 24)
@@ -54,12 +60,17 @@ class BasicSynchronousClient(object):
         self.camera = None
         self.car = None
 
+        self.goFwd = False
+        self.goRight = False
+        self.goLeft = False
+
         self.display = None
         self.font = None
         self.image = None
         self.capture = True
         self.boundingBoxes = False
         self.autonomusDriving = False
+        self.drivableArea = False
         self.trafficLights = []
 
     def camera_blueprint(self):
@@ -97,6 +108,7 @@ class BasicSynchronousClient(object):
         """
 
         camera_transform = carla.Transform(carla.Location(x=0.8, z=1.3), carla.Rotation(pitch=10))
+        #camera_transform = carla.Transform(carla.Location(x=1.5, z=2.4), carla.Rotation(pitch=10))
         self.camera = self.world.spawn_actor(self.camera_blueprint(), camera_transform, attach_to=self.car)
         weak_self = weakref.ref(self)
         self.camera.listen(lambda image: weak_self().set_image(weak_self, image))
@@ -123,6 +135,8 @@ class BasicSynchronousClient(object):
         T = toggle detection ON
         F = toggle detection OFF
         P = toggle autonomus driving
+        G = toggle drivable area ON
+        H = toggle drivable area OFF
         """
 
         keys = pygame.key.get_pressed()
@@ -172,6 +186,21 @@ class BasicSynchronousClient(object):
                     else:
                         control.throttle = 0
 
+            # Control for staying in the lane
+            if self.goFwd:
+                control.throttle = 1
+                control.reverse = False
+            elif self.goRight:
+                control.throttle = 1
+                control.reverse = False
+                control.steer = max(-1., min(control.steer + 0.05, 0))
+                print("RIGHT")
+            elif self.goLeft:
+                control.throttle = 1
+                control.reverse = False
+                control.steer = max(-1., min(control.steer - 0.05, 0))
+                print("LEFT")
+
         if speed > 15 and not control.reverse:
             control.throttle = 0
 
@@ -179,6 +208,10 @@ class BasicSynchronousClient(object):
             self.boundingBoxes = True
         if keys[K_f]:
             self.boundingBoxes = False
+        if keys[K_g]:
+            self.drivableArea = True
+        if keys[K_h]:
+            self.drivableArea = False
         if keys[K_p]:
             self.autonomusDriving = not self.autonomusDriving
 
@@ -231,11 +264,85 @@ class BasicSynchronousClient(object):
         if self.image is not None:
             array = np.frombuffer(self.image.raw_data, dtype=np.dtype("uint8"))
             array = np.reshape(array, (self.image.height, self.image.width, 4))
+            array_bgra = np.copy(array)
             array = array[:, :, :3]
             array = array[:, :, ::-1]
+            array_orig = np.copy(array)
+            array = cv2.resize(array, (640,384), interpolation=cv2.INTER_AREA)
+
+            # Drivable area
+            if self.drivableArea:
+                start_time = time()
+
+                data_drivable = np.array(detect_drivable_area(array), dtype=np.uint8)
+                data_drivable[:,:,0] = 0
+                data_drivable_draw = np.copy(data_drivable)
+                data_drivable[:,:,1] = 0
+
+                #try:
+                #    data_lane = draw_lane_normal(data_drivable)
+                #except:
+                #    data_lane = array
+                end_time = time()
+                print(f'lane detection time: {end_time - start_time}')
+
+                height = array.shape[0]
+                polygons = np.array([[(70, height), (570, height), (320, 230)]])
+                mask = np.zeros(array.shape, dtype=np.uint8)
+                cv2.fillPoly(mask, polygons, (255,255,255))
+                masked_image = cv2.bitwise_and(np.uint8(data_drivable), mask)
+                data_drivable = masked_image
+
+                blue_hist = cv2.calcHist([masked_image], [2], None, [256], [0, 256])[-1][-1]
+                print(f'blue hist: {blue_hist}')
+                if blue_hist > 3000:
+                    print("STOP!")
+
+                #indices = np.where(masked_image == [255])
+                #print(f'avg idx: {np.average(indices)}')
+                #coordinates = np.column_stack((indices[0], indices[1]))
+                #print(len(coordinates))
+
+                # Make lines thinner
+                gray = cv2.cvtColor(masked_image, cv2.COLOR_BGR2GRAY)
+                edges = cv2.Canny(gray, 50, 150, apertureSize = 3)
+                lines = cv2.HoughLinesP(edges, 2, np.pi/180, 100, np.array([]), minLineLength=40, maxLineGap=5)
+                try:
+                    # Average x coorinate for every y
+                    all_x = []
+                    for line in lines:
+                        for x1, y1, x2, y2 in line:
+                            all_x.append(x1)
+                            all_x.append(x2)
+
+                    avg_x = np.average(all_x)
+                    print(f'average x = {avg_x}')
+                    # 350 - 390 -> ravno
+                    # <350 -> desno
+                    # >390 -> levo
+                    if 350 < avg_x and avg_x < 390:
+                        self.goFwd
+                    elif avg_x < 350:
+                        self.goRight = True
+                    elif avg_x > 390:
+                        self.goLeft = True
+                except:
+                    print("Finding lines failed")
+
+                # Rendering
+                data_drivable = cv2.resize(data_drivable_draw, (self.image.width, self.image.height), interpolation=cv2.INTER_AREA)
+                #data_lane = cv2.resize(data_lane, (self.image.width, self.image.height), interpolation=cv2.INTER_AREA)
+                array = cv2.bitwise_or(array_orig, data_drivable)
+                #array = masked_image
+
+
+            else:
+                array = array_orig
 
             surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
             display.blit(surface, (0, 0))
+
+            self.render_gui(display)
             self.trafficLights = []
             if self.boundingBoxes:
                 lights_queue = Queue()
@@ -259,7 +366,7 @@ class BasicSynchronousClient(object):
 
                 if len(allElements) > 0:
                     self.render_detected(display, allElements)
-            self.render_gui(display)
+
                 
     def game_loop(self):
         try:
