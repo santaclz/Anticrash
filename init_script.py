@@ -1,15 +1,3 @@
-import glob
-import os
-import sys
-
-try:
-    sys.path.append(glob.glob('../PythonAPI/carla/dist/carla-*%d.%d-%s.egg' % (
-        sys.version_info.major,
-        sys.version_info.minor,
-        'win-amd64' if os.name == 'nt' else 'linux-x86_64'))[0])
-except IndexError:
-    pass
-
 import carla
 import random
 import argparse
@@ -26,9 +14,13 @@ def main():
     world = client.get_world()
     settings = world.get_settings()
 
-    if not args.render:
+    if not args.render and settings.no_rendering_mode == False:
         print('### Rendering disabled')
         settings.no_rendering_mode = True
+        world.unload_map_layer(carla.MapLayer.Buildings)
+        world.unload_map_layer(carla.MapLayer.Decals)
+        world.unload_map_layer(carla.MapLayer.Particles)
+        world.unload_map_layer(carla.MapLayer.Foliage)
     else:
         print('### Rendering enabled')
         settings.no_rendering_mode = False
@@ -43,7 +35,9 @@ def main():
             print(f'### Loading new world...')
             world = client.load_world(args.town)
             world.unload_map_layer(carla.MapLayer.Buildings)
-            world.unload_map_layer(carla.MapLayer.ParkedVehicles)
+            world.unload_map_layer(carla.MapLayer.Decals)
+            world.unload_map_layer(carla.MapLayer.Particles)
+            world.unload_map_layer(carla.MapLayer.Foliage)
             print('### Done')
 
 
