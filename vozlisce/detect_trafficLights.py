@@ -1,6 +1,8 @@
+from sys import maxsize
 import numpy as np
 import skimage.exposure as exposure
 import cv2
+import copy
 
 def detectDominantLight(image):
     original = image.copy()
@@ -71,9 +73,46 @@ def getTrafficLightStates(trafficLights, image):
         trafficLightStates.append((light[0], light[1], light[2], light[3], light[4], detectDominantLight(croppedImage), "trafficlight"))
     return trafficLightStates
 
+def get_focus_light(img_x, lights):
+    focusLights = copy.deepcopy(lights)
+    if len(focusLights) > 0:
+        size_max = 0
+        size_index = 0
+        center = img_x / 2
+        center_index = 0
+        min_center_diff = center
+
+        for i, light in enumerate(focusLights):
+            if light[0] < (center*2) / 3: # or light[4] < 0.45:
+                continue
+            
+            size_current = (light[1]-light[0])*(light[3]-light[2])
+            if size_current > size_max:
+                size_max = size_current
+                size_index = i
+            
+            diff_current = abs((light[0]+(light[1]-light[0])/2) - center)
+            if diff_current < min_center_diff:
+                center_index = i
+                min_center_diff = diff_current
+
+        maxSizeLight = focusLights[size_index]
+        if min_center_diff < (center*2)/3: #and abs((maxSizeLight[0]+(maxSizeLight[1]-maxSizeLight[0])/2) - center) > (center)/3:
+            focusLight = focusLights[center_index]
+        else:
+            focusLight = focusLights[size_index]
+        
+        focusLights.remove(focusLight)
+        focusLights.append((focusLight[0], focusLight[1], focusLight[2], focusLight[3], focusLight[4], focusLight[5], focusLight[6], (0,255,255)))
+        return focusLights
+    return []
+
 def get_trafficlights(img, recognized, out_queue):
     extracted_trafficlights = extractTrafficLights(recognized)
     if len(extracted_trafficlights) == 0:
         return []
-    #return getTrafficLightStates(extracted_trafficlights, img[:, :, ::-1])
-    out_queue.put(getTrafficLightStates(extracted_trafficlights, img[:, :, ::-1]))
+    if len(extracted_trafficlights) > 1:
+        highlighted_focusLight = get_focus_light(img.shape[1], getTrafficLightStates(extracted_trafficlights, img[:, :, ::-1]))
+        out_queue.put(highlighted_focusLight)
+    else:
+        out_queue.put(getTrafficLightStates(extracted_trafficlights, img[:, :, ::-1]))
