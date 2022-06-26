@@ -61,6 +61,7 @@ class BasicSynchronousClient(object):
         self.client = None
         self.world = None
         self.camera = None
+        self.depth_camera = None
         self.car = None
 
         self.goFwd = False
@@ -76,14 +77,18 @@ class BasicSynchronousClient(object):
         self.drivableArea = False
         self.trafficLights = []
 
-    def camera_blueprint(self):
+    def camera_blueprint(self, camera_type):
         """
         Returns camera blueprint.
         """
 
-        camera_bp = self.world.get_blueprint_library().find('sensor.camera.rgb')
-        camera_bp.set_attribute('image_size_x', str(VIEW_WIDTH))
-        camera_bp.set_attribute('image_size_y', str(VIEW_HEIGHT))
+        camera_bp = self.world.get_blueprint_library().find(camera_type)
+        if camera_type == 'sensor.camera.depth':
+            camera_bp.set_attribute('image_size_x', str(480))
+            camera_bp.set_attribute('image_size_y', str(240))
+        else:
+            camera_bp.set_attribute('image_size_x', str(VIEW_WIDTH))
+            camera_bp.set_attribute('image_size_y', str(VIEW_HEIGHT))
         camera_bp.set_attribute('fov', str(VIEW_FOV))
         return camera_bp
 
@@ -112,9 +117,11 @@ class BasicSynchronousClient(object):
 
         camera_transform = carla.Transform(carla.Location(x=0.8, z=1.3), carla.Rotation(pitch=10))
         #camera_transform = carla.Transform(carla.Location(x=1.5, z=2.4), carla.Rotation(pitch=10))
-        self.camera = self.world.spawn_actor(self.camera_blueprint(), camera_transform, attach_to=self.car)
+        self.camera = self.world.spawn_actor(self.camera_blueprint('sensor.camera.rgb'), camera_transform, attach_to=self.car)
+        self.depth_camera = self.world.spawn_actor(self.camera_blueprint('sensor.camera.depth'), camera_transform, attach_to=self.car)
         weak_self = weakref.ref(self)
         self.camera.listen(lambda image: weak_self().set_image(weak_self, image))
+        self.depth_camera.listen(lambda image: weak_self().set_image(weak_self, image))
 
     def calcualte_speed(self, car):
         carla_velocity_vec3 = car.get_velocity()
@@ -355,12 +362,12 @@ class BasicSynchronousClient(object):
                 car_queue = Queue()
                 allElements = []
                 recognized_objects = model(array)
-                trafficThread = Thread(target=detect_trafficLights.get_trafficlights, args=(array, recognized_objects, lights_queue))
-                trafficThread.start()
+                # trafficThread = Thread(target=detect_trafficLights.get_trafficlights, args=(array, recognized_objects, lights_queue))
+                # trafficThread.start()
                 vehicleThead = Thread(target=detect_vehicles.get_vehicles, args=(recognized_objects, car_queue))
                 vehicleThead.start()
 
-                trafficThread.join()
+                # trafficThread.join()
                 vehicleThead.join()
 
                 while not (car_queue.empty() and lights_queue.empty()):
@@ -371,7 +378,21 @@ class BasicSynchronousClient(object):
                         allElements += self.trafficLights
 
                 if len(allElements) > 0:
-                    self.render_detected(display, allElements)
+                    try:
+                        el = allElements[0][:4]
+                        el = [int(e) for e in el]
+                        c = allElements[0]
+                        mx = int((el[0] + el[2]) / 2)
+                        my = int((el[1] + el[3]) / 2)
+                        c = (mx, my, 135, 135, 0.7, 'car')
+                        allElements[-1] = c
+                        # print(allElements[-1])
+                        self.render_detected(display, allElements)
+                        normalized = (array_orig[mx,my,0] + array_orig[mx,my,1] * 256 + array_orig[mx,my,2] * 256 * 256) / (256 * 256 * 256-1)  * 1000
+                        print(np.mean(normalized[el[0]:el[0]+el[2],el[1]:el[1]+el[3]]))
+                        # print(f'mx:{mx}, my:{my}, nor:{normalized}')
+                    except Exception as e:
+                        print(e)
 
                 
     def game_loop(self):
@@ -412,6 +433,7 @@ class BasicSynchronousClient(object):
         finally:
             self.set_synchronous_mode(False)
             self.camera.destroy()
+            self.depth_camera.destroy()
             self.car.destroy()
             pygame.quit()
 
