@@ -378,21 +378,21 @@ class BasicSynchronousClient(object):
                         allElements += self.trafficLights
 
                 if len(allElements) > 0:
-                    try:
-                        el = allElements[0][:4]
-                        el = [int(e) for e in el]
-                        c = allElements[0]
-                        mx = int((el[0] + el[2]) / 2)
-                        my = int((el[1] + el[3]) / 2)
-                        c = (mx, my, 135, 135, 0.7, 'car')
-                        allElements[-1] = c
-                        # print(allElements[-1])
+                    # try:
+                    #     el = allElements[0][:4]
+                    #     el = [int(e) for e in el]
+                    #     c = allElements[0]
+                    #     mx = int((el[0] + el[2]) / 2)
+                    #     my = int((el[1] + el[3]) / 2)
+                    #     c = (mx, my, 135, 135, 0.7, 'car')
+                    #     allElements[-1] = c
+                    #     # print(allElements[-1])
                         self.render_detected(display, allElements)
-                        normalized = (array_orig[mx,my,0] + array_orig[mx,my,1] * 256 + array_orig[mx,my,2] * 256 * 256) / (256 * 256 * 256-1)  * 1000
-                        print(np.mean(normalized[el[0]:el[0]+el[2],el[1]:el[1]+el[3]]))
+                        # normalized = (array_orig[mx,my,0] + array_orig[mx,my,1] * 256 + array_orig[mx,my,2] * 256 * 256) / (256 * 256 * 256-1)  * 1000
+                        # print(np.mean(normalized[el[0]:el[0]+el[2],el[1]:el[1]+el[3]]))
                         # print(f'mx:{mx}, my:{my}, nor:{normalized}')
-                    except Exception as e:
-                        print(e)
+                    # except Exception as e:
+                    #     print(e)
 
                 
     def game_loop(self):
