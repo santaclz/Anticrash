@@ -15,6 +15,7 @@ import random
 import os
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
+import math
 import numpy as np
 import torch
 from threading import Thread
@@ -149,6 +150,19 @@ class BasicSynchronousClient(object):
         control = car.get_control()
         speed = self.calcualte_speed(car)
 
+        main_light = [item for item in self.trafficLights if len(item) == 8]
+        if self.boundingBoxes and len(main_light) != 0:
+            main_light = main_light[0]
+            l = self.proxy.get_location()
+            if main_light[5] == (204, 0, 0): l.z = 0
+            elif main_light[5] == (0, 255, 0): l.z = 1
+            else: l.z = 2
+            self.proxy.set_location(l)
+        else:
+            l = self.proxy.get_location()
+            l.z = 2
+            self.proxy.set_location(l)
+
         if not self.autonomusDriving:
             control.throttle = 0
             if keys[K_w]:
@@ -170,10 +184,9 @@ class BasicSynchronousClient(object):
             if not self.boundingBoxes:
                 control.throttle = 0
                 pass
-            main_light = [item for item in self.trafficLights if len(item) == 8]
             if len(main_light) != 0:
                 main_light = main_light[0]
-                if main_light[5] == (204, 0, 0):
+                if main_light[5] == (204, 0, 0): # red
                     if speed > 10:
                         control.throttle = 1
                         control.reverse = True
@@ -185,7 +198,7 @@ class BasicSynchronousClient(object):
                         control.reverse = True
                     else:
                         control.throttle = 0
-                elif main_light[5] == (0, 255, 0):
+                elif main_light[5] == (0, 255, 0): # green
                     control.throttle = 1
                     control.reverse = False
                 else:
@@ -383,9 +396,26 @@ class BasicSynchronousClient(object):
             self.client.set_timeout(5.0)
             self.world = self.client.get_world()
             #self.world = self.client.load_world('Town02')
+            #trafficLight_bp = self.world.get_blueprint_library().find('trafficLight_Cube_Blueprint')
+            proxy = [-75.7, 107.5, 7.8]
+
+            al = self.world.get_actors()
+            for spm in al.filter('static.prop.mesh'):
+                l=spm.get_location()
+                print(f"id={spm.id} location={l}")
+                if (math.isclose(l.x, proxy[0], abs_tol=0.001) and
+                        math.isclose(l.y, proxy[1], abs_tol=0.001) and
+                        math.isclose(l.z, proxy[2], abs_tol=0.001)):
+                    print(f"{spm.id} is the correct id!")
+                    self.proxy = spm
+                    l.z = 8
+                    self.proxy.set_location(l)
+
+                #l.z=10; # tukaj spremenimo položaj objekta glede na podatke iz senzorja
+                #spm.set_location(l);
 
             settings = self.world.get_settings()
-            settings.no_rendering_mode = True # disable server rendering for better pc performance
+            # settings.no_rendering_mode = True # disable server rendering for better pc performance
             settings.fixed_delta_seconds = 0 # set fixed server step for synchronous client
             self.world.apply_settings(settings)
 
